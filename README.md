@@ -15,7 +15,7 @@ Following the global transition from forward-looking LIBOR benchmarks to backwar
 
 ---
 
-## Key Results & Real Market Calibration (Federal Reserve Data)
+## Real Market Calibration Results (Federal Reserve FRED Data)
 
 Calibrated on official Federal Reserve Economic Data (FRED) spanning 2018 through July 2026:
 
@@ -33,11 +33,37 @@ Calibrated on official Federal Reserve Economic Data (FRED) spanning 2018 throug
 
 ---
 
+## 📈 Charts & Empirical Visualizations
+
+### 1. Historical Federal Reserve SOFR & Real Market Yield Curve Fit
+![Real Market Calibration](figures/fig1_real_market_calibration.png)
+*Figure 1: (Left) Federal Reserve daily historical SOFR series (2018–2026). (Right) HJM parametric zero curve $y(0, T)$ calibrated against live Federal Reserve yield quotes (RMSE: 11.35 bps).*
+
+---
+
+### 2. Calibrated Continuous 3D SOFR Forward Surface $f(t, T)$
+![Calibrated Real Forward Surface](figures/fig2_real_forward_surface.png)
+*Figure 2: 3D evolution of the instantaneous forward rate curve $f(t, T)$ across time $t \in [0, 5]$ years and maturity $T \in [0, 5]$ years under exponential HJM volatility decay.*
+
+---
+
+### 3. Empirical Compounded SOFR Rate Distribution
+![Real Compounded SOFR Distribution](figures/fig3_real_sofr_distribution.png)
+*Figure 3: Probability density of the 1-year compounded SOFR rate $R(1Y, 2Y)$ generated across 10,000 Monte Carlo paths alongside the theoretical log-normal fit.*
+
+---
+
+### 4. Calibrated Short Rate Trajectories & Forward Curve Forecasts
+![Rate Trajectories and Projections](figures/fig4_real_curve_projections.png)
+*Figure 4: (Left) Simulated short rate trajectories $r(t)$ calibrated to real historical SOFR volatility. (Right) Snapshot projections of the forward rate curve $f(t, T)$ at $t = 0, 1, 2,$ and $3$ years.*
+
+---
+
 ## Repository Structure
 
 ```
 SOFR_HJM_Research_Paper/
-├── README.md                      # Project documentation
+├── README.md                      # Project documentation with embedded plots
 ├── paper.pdf                      # Compiled publication-ready PDF paper (arXiv style)
 ├── paper.md                       # Full research paper in Markdown format
 ├── paper.tex                      # Standalone LaTeX source code
@@ -67,13 +93,13 @@ pdflatex paper.tex
 
 ---
 
-## How to Push to Your New GitHub Repository
+## Citation
 
-```bash
-git init
-git add .
-git commit -m "Initial commit: SOFR-HJM continuous-time term structure research paper"
-git branch -M main
-git remote add origin https://github.com/<YOUR_USERNAME>/<YOUR_NEW_REPO_NAME>.git
-git push -u origin main
+```bibtex
+@article{quant_group_2026_sofr_hjm,
+  title={Continuous-Time Heath-Jarrow-Morton Term Structure Modeling under Backward-Looking Compounded SOFR Dynamics},
+  author={Advanced Quantitative Finance \& Financial Mathematics Group},
+  year={2026},
+  journal={arXiv preprint}
+}
 ```
