@@ -88,15 +88,15 @@ def calibrated_hjm_drift(t, T):
     return vol * integrated_vol
 
 # --- 4. High-Precision Monte Carlo Simulation under Calibrated HJM ---
-n_paths = 20000
+n_paths = 30000
 T_max = 5.0
-n_steps = 250 # Fine resolution (dt = 0.02 yrs = ~5 trading days)
+n_steps = 250
 dt = T_max / n_steps
 time_grid = np.linspace(0, T_max, n_steps + 1)
 n_maturities = 50
 maturity_grid = np.linspace(0, T_max, n_maturities)
 
-# Antithetic Variates for variance reduction
+# Antithetic variates for variance reduction
 half_paths = n_paths // 2
 dW_half = np.random.normal(0, np.sqrt(dt), (n_steps, half_paths))
 dW = np.hstack([dW_half, -dW_half])
@@ -127,10 +127,12 @@ for i in range(n_steps):
     drift_r = theta_t - a_vol_calibrated * r_paths[i, :]
     r_paths[i+1, :] = r_paths[i, :] + drift_r * dt + sigma_0_calibrated * dW[i, :]
 
-# Calculate 1Y-2Y Compounded SOFR rate
+# Calculate 1Y-2Y Compounded SOFR rate using Trapezoidal Integration
 T1, T2 = 1.0, 2.0
 idx_T1, idx_T2 = int(T1/dt), int(T2/dt)
-integral_r = np.sum(r_paths[idx_T1:idx_T2, :], axis=0) * dt
+
+trapz_fn = getattr(np, 'trapezoid', getattr(np, 'trapz'))
+integral_r = trapz_fn(r_paths[idx_T1:idx_T2+1, :], dx=dt, axis=0)
 R_compounded_real = (np.exp(integral_r) - 1.0) / (T2 - T1)
 
 y1 = model_zero_yield(T1, r0_fit, r_inf_fit, kappa_fit, gamma_fit)
@@ -141,7 +143,7 @@ P_0_T2_analytical = np.exp(-y2 * T2)
 F_SOFR_analytical_real = (P_0_T1_analytical / P_0_T2_analytical - 1.0) / (T2 - T1)
 F_SOFR_mc_real = R_compounded_real.mean()
 
-# Exact Analytical Jamshidian Bond Option Formula for SOFR Caplets
+# --- Exact Analytical Jamshidian Bond Option Formula for SOFR Caplets ---
 K_real = 0.0450
 K_star = 1.0 + K_real * (T2 - T1)
 sig_p = (sigma_0_calibrated / a_vol_calibrated) * (1.0 - np.exp(-a_vol_calibrated * (T2 - T1))) * np.sqrt((1.0 - np.exp(-2.0 * a_vol_calibrated * T1)) / (2.0 * a_vol_calibrated))
@@ -149,12 +151,12 @@ sig_p = (sigma_0_calibrated / a_vol_calibrated) * (1.0 - np.exp(-a_vol_calibrate
 d1 = (np.log(P_0_T1_analytical / (K_star * P_0_T2_analytical)) + 0.5 * sig_p**2) / sig_p
 d2 = d1 - sig_p
 
-caplet_price_real_analytical = K_star * P_0_T2_analytical * stats.norm.cdf(-d2) - P_0_T1_analytical * stats.norm.cdf(-d1)
+caplet_price_real_analytical = P_0_T1_analytical * stats.norm.cdf(d1) - K_star * P_0_T2_analytical * stats.norm.cdf(d2)
 
-# Monte Carlo Caplet Pricing
+# High-Precision Continuous Discounting Monte Carlo Caplet Pricing
+discount_to_T2 = np.exp(-trapz_fn(r_paths[:idx_T2+1, :], dx=dt, axis=0))
 payoff_caplet = np.maximum(R_compounded_real - K_real, 0.0) * (T2 - T1)
-discount_to_0 = np.exp(-np.sum(r_paths[:idx_T2, :], axis=0) * dt)
-caplet_price_real_mc = (discount_to_0 * payoff_caplet).mean()
+caplet_price_real_mc = (discount_to_T2 * payoff_caplet).mean()
 
 pricing_diff_bps = abs(caplet_price_real_analytical - caplet_price_real_mc) * 10000
 
@@ -164,7 +166,7 @@ print(f"Forward SOFR Rate Analytical: {F_SOFR_analytical_real*100:.4f}%")
 print(f"Forward SOFR Rate Monte Carlo: {F_SOFR_mc_real*100:.4f}%")
 print(f"SOFR Caplet Price Analytical: {caplet_price_real_analytical*10000:.2f} bps")
 print(f"SOFR Caplet Price Monte Carlo: {caplet_price_real_mc*10000:.2f} bps")
-print(f"Pricing Error: {pricing_diff_bps:.2f} bps")
+print(f"Pricing Error: {pricing_diff_bps:.4f} bps")
 
 # --- 5. Generate Publication Figures ---
 plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
@@ -209,7 +211,7 @@ plt.savefig("figures/fig2_real_forward_surface.png")
 plt.close()
 
 fig, ax = plt.subplots(figsize=(8, 5), dpi=300)
-n_bins, bins, patches = ax.hist(R_compounded_real * 100, bins=60, density=True, alpha=0.6, color='#2ca02c', edgecolor='black', label='Compounded SOFR $R(1Y, 2Y)$ MC Distribution (20,000 Paths)')
+n_bins, bins, patches = ax.hist(R_compounded_real * 100, bins=60, density=True, alpha=0.6, color='#2ca02c', edgecolor='black', label='Compounded SOFR $R(1Y, 2Y)$ MC Distribution (30,000 Paths)')
 shape, loc, scale = stats.lognorm.fit(R_compounded_real * 100, floc=0)
 x_pdf = np.linspace(bins[0], bins[-1], 200)
 pdf_fitted = stats.lognorm.pdf(x_pdf, shape, loc, scale)
