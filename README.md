@@ -1,13 +1,11 @@
 # Continuous-Time Heath-Jarrow-Morton Term Structure Modeling under Backward-Looking Compounded SOFR Dynamics
 
-[![Paper PDF](https://img.shields.io/badge/Paper-PDF-red.svg)](paper.pdf)
-[![LaTeX Source](https://img.shields.io/badge/LaTeX-arXiv-blue.svg)](paper.tex)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-green.svg)](src/calibrate_sofr_hjm_real_data.py)
 [![Data-Federal Reserve](https://img.shields.io/badge/Data-Federal%20Reserve%20(FRED)-orange.svg)](https://fred.stlouisfed.org)
 
 ## Overview
 
-This repository contains the complete research paper, mathematical framework, simulation code, and real Federal Reserve market data calibration for our novel research paper:
+This repository contains the mathematical framework, calibration code, numerical simulation engine, and real Federal Reserve market data for continuous-time term structure modeling under backward-looking compounded Risk-Free Rates (SOFR):
 
 > **Continuous-Time Heath-Jarrow-Morton Term Structure Modeling under Backward-Looking Compounded SOFR Dynamics**
 
@@ -62,11 +60,8 @@ Calibrated on official Federal Reserve Economic Data (FRED) spanning 2018 throug
 ## Repository Structure
 
 ```
-SOFR_HJM_Research_Paper/
+SOFR_HJM_Term_Structure_Model/
 ├── README.md                      # Project documentation with embedded plots
-├── paper.pdf                      # Compiled publication-ready PDF paper (arXiv style)
-├── paper.md                       # Full research paper in Markdown format
-├── paper.tex                      # Standalone LaTeX source code
 ├── src/
 │   ├── calibrate_sofr_hjm_real_data.py  # Calibration script on live FRED data
 │   └── sofr_hjm.py                      # Monte Carlo simulation & PIDE engine
@@ -81,25 +76,7 @@ SOFR_HJM_Research_Paper/
 
 ## Quick Start
 
-### 1. Run Real Market Calibration Pipeline
+### Run Real Market Calibration Pipeline
 ```bash
 python src/calibrate_sofr_hjm_real_data.py
-```
-
-### 2. Compile LaTeX Paper
-```bash
-pdflatex paper.tex
-```
-
----
-
-## Citation
-
-```bibtex
-@article{quant_group_2026_sofr_hjm,
-  title={Continuous-Time Heath-Jarrow-Morton Term Structure Modeling under Backward-Looking Compounded SOFR Dynamics},
-  author={Advanced Quantitative Finance \& Financial Mathematics Group},
-  year={2026},
-  journal={arXiv preprint}
-}
 ```
