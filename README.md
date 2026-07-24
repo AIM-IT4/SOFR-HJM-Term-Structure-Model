@@ -1,6 +1,6 @@
 # Continuous-Time Heath-Jarrow-Morton Term Structure Modeling under Backward-Looking Compounded SOFR Dynamics
 
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-green.svg)](src/calibrate_sofr_hjm_real_data.py)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-green.svg)](src/calibrate_all_stochastic_models.py)
 [![Data-Federal Reserve](https://img.shields.io/badge/Data-Federal%20Reserve%20(FRED)-orange.svg)](https://fred.stlouisfed.org)
 
 ## Overview
@@ -13,26 +13,26 @@ Following the global transition from forward-looking LIBOR benchmarks to backwar
 
 ---
 
-## 🏆 Comprehensive Comparison with Classic & Modern Stochastic Models
+## 🏆 Multi-Model Empirical Calibration Benchmark (Federal Reserve Real Market Data)
 
-Below is a systematic comparison matrix evaluating our **SOFR-HJM Model** against major stochastic interest rate and volatility models in quantitative finance:
+We calibrated **5 major stochastic and yield curve models** on the exact same Federal Reserve market dataset (July 23, 2026). Below are the empirical calibration error statistics and structural comparisons:
 
-| Model | Target Benchmark | Initial Curve Calibration | Compounded SOFR Handling | Option Pricing Speed | No-Arbitrage Property | Main Vulnerability / Limitation |
+### Empirical Model Calibration Benchmark Table
+
+| Model | Target Benchmark | Yield Curve Fit RMSE (bps) | Max Fitting Error (bps) | Calibration Speed (ms) | Compounded SOFR Handling | Main Advantage / Limitation |
 | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| **Vasicek (1977)** | Short Rate | Poor (Fixed mean reversion) | ❌ Incompatible | Closed-Form | Weak | Allows negative interest rates; fails yield curve fitting |
-| **Cox-Ingersoll-Ross / CIR (1985)** | Short Rate | Poor (Parametric) | ❌ Incompatible | Closed-Form | Weak | Fails to fit complex market yield curve shapes |
-| **Hull-White 1-Factor (1990)** | Short Rate | Exact (Time-varying $\theta(t)$) | ⚠️ Partial (Approximate) | Closed-Form | Enforced | Cannot fit volatility smiles across multiple maturities |
-| **Classic HJM (1992)** | Forward LIBOR | Exact (by construction) | ❌ LIBOR Only | Semi-Analytical | Enforced | Designed for forward-looking LIBOR, not SOFR compounding |
-| **LIBOR Market Model / LMM (1997)** | Forward LIBOR | Exact | ❌ LIBOR Only | Slow Monte Carlo | Enforced | Structurally fails under backward-looking compounded SOFR |
-| **Rough Heston / Bergomi (2018)** | Volatility | Good | ⚠️ Monte Carlo Only | Very Slow MC | Enforced | Non-Markovian; high computational cost for curve pricing |
-| **⭐ Our Model: SOFR-HJM (2026)** | **Overnight SOFR** | **Exact (RMSE: 11.35 bps)** | **✅ Exact Continuous $\mathbb{Q}^{T_2}$** | **Sub-millisecond** | **Strictly Enforced** | **Single-factor baseline (extensible to multi-factor)** |
+| **Vasicek (1977)** | Short Rate | **10.73 bps** | **22.58 bps** | 7.51 ms | ❌ Incompatible | Allows negative interest rates; fails backward SOFR compounding |
+| **Cox-Ingersoll-Ross (1985)** | Short Rate | **10.95 bps** | **23.66 bps** | 6.66 ms | ❌ Incompatible | Guarantees non-negative rates; rigid parametric curve shape |
+| **Nelson-Siegel-Svensson (1994)** | Static Curve | **6.33 bps** | **12.20 bps** | 9.63 ms | ❌ Incompatible | Flexible parametric fit; lacks stochastic no-arbitrage SDE dynamics |
+| **Hull-White 1-Factor (1990)** | Short Rate | **0.00 bps** | **0.00 bps** | 1.20 ms | ⚠️ Partial Approx | Exact initial yield fit; designed for forward-looking LIBOR |
+| **⭐ Our SOFR-HJM Model (2026)** | **Overnight SOFR** | **11.35 bps** | **21.74 bps** | **2.67 ms** | **✅ Exact Continuous $\mathbb{Q}^{T_2}$** | **Exact continuous SOFR measure transformation & closed-form option pricing** |
 
 ---
 
-## Real Market Calibration & Model Performance (Federal Reserve Data)
+## Real Market Calibration Performance
 
 ### Table 1: Live Input Market Rates (Federal Reserve Data as of July 23, 2026)
-*These are the actual real-world interest rate benchmarks fetched from the Federal Reserve (FRED) used to calibrate the model:*
+*These are the actual real-world interest rate benchmarks fetched from the Federal Reserve (FRED) used to calibrate all models:*
 
 | Market Instrument / Tenor | Federal Reserve Market Rate | Data Source |
 | :--- | :---: | :--- |
@@ -48,7 +48,7 @@ Below is a systematic comparison matrix evaluating our **SOFR-HJM Model** agains
 
 ---
 
-### Table 2: Model Pricing & High-Precision Simulation Performance
+### Table 2: SOFR-HJM Pricing & Simulation Performance
 *Comparison between our closed-form Jamshidian analytical formula and the 30,000-path Monte Carlo simulation engine:*
 
 | Instrument / Derivative | Closed-Form Analytical Formula | 30,000-Path Monte Carlo Simulation | Absolute Difference / Pricing Error |
@@ -61,27 +61,39 @@ Below is a systematic comparison matrix evaluating our **SOFR-HJM Model** agains
 
 ## 📈 Charts & Empirical Visualizations
 
-### 1. Historical Federal Reserve SOFR & Real Market Yield Curve Fit
+### 1. Empirical Yield Curve Fitting Across All Stochastic Models
+![Model Calibration Comparison](figures/fig5_model_calibration_comparison.png)
+*Figure 1: Yield curve fitting performance of Vasicek (1977), CIR (1985), Nelson-Siegel-Svensson (1994), and our SOFR-HJM Model against real Federal Reserve yield quotes (July 2026).*
+
+---
+
+### 2. Calibration Error Bar Chart (RMSE & Max Error in bps)
+![Calibration Error Bar Chart](figures/fig6_calibration_error_barchart.png)
+*Figure 2: Empirical Root Mean Squared Error (RMSE) and Maximum Fitting Error (bps) across Vasicek, CIR, Nelson-Siegel, Hull-White, and SOFR-HJM.*
+
+---
+
+### 3. Historical Federal Reserve SOFR & Real Market Yield Curve Fit
 ![Real Market Calibration](figures/fig1_real_market_calibration.png)
-*Figure 1: (Left) Federal Reserve daily historical SOFR series (2018–2026). (Right) HJM parametric zero curve $y(0, T)$ calibrated against live Federal Reserve yield quotes (RMSE: 11.35 bps).*
+*Figure 3: (Left) Federal Reserve daily historical SOFR series (2018–2026). (Right) HJM parametric zero curve $y(0, T)$ calibrated against live Federal Reserve yield quotes (RMSE: 11.35 bps).*
 
 ---
 
-### 2. Calibrated Continuous 3D SOFR Forward Surface $f(t, T)$
+### 4. Calibrated Continuous 3D SOFR Forward Surface $f(t, T)$
 ![Calibrated Real Forward Surface](figures/fig2_real_forward_surface.png)
-*Figure 2: 3D evolution of the instantaneous forward rate curve $f(t, T)$ across time $t \in [0, 5]$ years and maturity $T \in [0, 5]$ years under exponential HJM volatility decay.*
+*Figure 4: 3D evolution of the instantaneous forward rate curve $f(t, T)$ across time $t \in [0, 5]$ years and maturity $T \in [0, 5]$ years under exponential HJM volatility decay.*
 
 ---
 
-### 3. Empirical Compounded SOFR Rate Distribution
+### 5. Empirical Compounded SOFR Rate Distribution
 ![Real Compounded SOFR Distribution](figures/fig3_real_sofr_distribution.png)
-*Figure 3: Probability density of the 1-year compounded SOFR rate $R(1Y, 2Y)$ generated across 30,000 Monte Carlo paths alongside the theoretical log-normal fit.*
+*Figure 5: Probability density of the 1-year compounded SOFR rate $R(1Y, 2Y)$ generated across 30,000 Monte Carlo paths alongside the theoretical log-normal fit.*
 
 ---
 
-### 4. Calibrated Short Rate Trajectories & Forward Curve Forecasts
+### 6. Calibrated Short Rate Trajectories & Forward Curve Forecasts
 ![Rate Trajectories and Projections](figures/fig4_real_curve_projections.png)
-*Figure 4: (Left) Simulated short rate trajectories $r(t)$ calibrated to real historical SOFR volatility. (Right) Snapshot projections of the forward rate curve $f(t, T)$ at $t = 0, 1, 2,$ and $3$ years.*
+*Figure 6: (Left) Simulated short rate trajectories $r(t)$ calibrated to real historical SOFR volatility. (Right) Snapshot projections of the forward rate curve $f(t, T)$ at $t = 0, 1, 2,$ and $3$ years.*
 
 ---
 
@@ -91,20 +103,28 @@ Below is a systematic comparison matrix evaluating our **SOFR-HJM Model** agains
 SOFR_HJM_Research_Paper/
 ├── README.md                      # Project documentation with comparison table & plots
 ├── src/
-│   ├── calibrate_sofr_hjm_real_data.py  # High-precision calibration script on live FRED data
-│   └── sofr_hjm.py                      # Monte Carlo simulation & PIDE engine
+│   ├── calibrate_all_stochastic_models.py # Multi-model empirical calibration benchmark
+│   ├── calibrate_sofr_hjm_real_data.py    # SOFR-HJM high-precision calibration script
+│   └── sofr_hjm.py                        # Monte Carlo simulation & PIDE engine
 └── figures/
-    ├── fig1_real_market_calibration.png # Historical SOFR & Yield Curve fit
-    ├── fig2_real_forward_surface.png    # Calibrated 3D Forward Surface
-    ├── fig3_real_sofr_distribution.png # Compounded SOFR PDF fit
-    └── fig4_real_curve_projections.png    # Rate paths & forward curve forecasts
+    ├── fig1_real_market_calibration.png     # Historical SOFR & Yield Curve fit
+    ├── fig2_real_forward_surface.png        # Calibrated 3D Forward Surface
+    ├── fig3_real_sofr_distribution.png     # Compounded SOFR PDF fit
+    ├── fig4_real_curve_projections.png        # Rate paths & forward curve forecasts
+    ├── fig5_model_calibration_comparison.png # Multi-model yield curve fit comparison
+    └── fig6_calibration_error_barchart.png   # Model RMSE & Max Error bar chart
 ```
 
 ---
 
 ## Quick Start
 
-### Run Real Market Calibration Pipeline
+### 1. Run Multi-Model Calibration Benchmark
+```bash
+python src/calibrate_all_stochastic_models.py
+```
+
+### 2. Run SOFR-HJM Model Pipeline
 ```bash
 python src/calibrate_sofr_hjm_real_data.py
 ```
