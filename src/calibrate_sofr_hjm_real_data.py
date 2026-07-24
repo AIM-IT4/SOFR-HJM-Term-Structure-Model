@@ -7,7 +7,7 @@ import scipy.stats as stats
 
 # Ensure directories exist
 os.makedirs("figures", exist_ok=True)
-os.makedirs("scratch", exist_ok=True)
+os.makedirs("src", exist_ok=True)
 
 # Set seed for reproducibility
 np.random.seed(42)
@@ -27,13 +27,9 @@ for i in ids:
         print(f"Warning fetching {i}: {e}")
 
 market_df = pd.concat(dfs, axis=1).sort_index().ffill().bfill()
-print(f"Data range: {market_df.index[0].strftime('%Y-%m-%d')} to {market_df.index[-1].strftime('%Y-%m-%d')}")
-
-# Get most recent yield curve (July 2026 data)
 latest_date = market_df.index[-1]
 latest_rates = market_df.loc[latest_date]
-print(f"\nLatest Market Rates ({latest_date.strftime('%Y-%m-%d')}):")
-print(latest_rates)
+print(f"Data range: {market_df.index[0].strftime('%Y-%m-%d')} to {latest_date.strftime('%Y-%m-%d')}")
 
 # Market maturities in years
 maturities_market = np.array([1/12, 3/12, 6/12, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 30.0])
@@ -51,11 +47,7 @@ yields_market = np.array([
 ])
 
 # --- 2. Real Market Curve Calibration (Parametric Forward Curve Fit) ---
-# Parametric forward curve f(0, T) = r0 + (r_inf - r0)*(1 - exp(-kappa*T)) + gamma*T*exp(-kappa*T)
-# Zero yield y(0, T) = (1/T) * \int_0^T f(0, u) du
-
 def model_zero_yield(T, r0, r_inf, kappa, gamma):
-    # Integral of f(0, u): r_inf * T + (r0 - r_inf)/kappa * (1 - exp(-kappa*T)) + (gamma/kappa^2)*(1 - exp(-kappa*T) - kappa*T*exp(-kappa*T))
     exp_kT = np.exp(-kappa * T)
     term1 = r_inf * T
     term2 = ((r0 - r_inf) / kappa) * (1.0 - exp_kT)
@@ -67,7 +59,6 @@ def objective_fn(params):
     y_pred = np.array([model_zero_yield(T, r0, r_inf, kappa, gamma) for T in maturities_market])
     return np.sum((y_pred - yields_market)**2)
 
-# Initial guess for optimization
 r0_init = yields_market[0]
 init_params = [r0_init, 0.05, 0.4, 0.01]
 bounds = [(0.01, 0.08), (0.01, 0.08), (0.05, 2.0), (-0.1, 0.1)]
@@ -75,29 +66,16 @@ bounds = [(0.01, 0.08), (0.01, 0.08), (0.05, 2.0), (-0.1, 0.1)]
 opt_res = optimize.minimize(objective_fn, init_params, bounds=bounds, method='L-BFGS-B')
 r0_fit, r_inf_fit, kappa_fit, gamma_fit = opt_res.x
 
-print(f"\n--- Calibrated Initial Forward Curve Parameters ---")
-print(f"r0 (Short rate): {r0_fit*100:.4f}%")
-print(f"r_inf (Asymptotic rate): {r_inf_fit*100:.4f}%")
-print(f"kappa (Mean reversion speed): {kappa_fit:.4f}")
-print(f"gamma (Curvature): {gamma_fit:.4f}")
-
-# Compute fitted yield curve RMSE
 yields_fitted = np.array([model_zero_yield(T, r0_fit, r_inf_fit, kappa_fit, gamma_fit) for T in maturities_market])
 rmse_bps = np.sqrt(np.mean((yields_fitted - yields_market)**2)) * 10000
-print(f"Yield Curve Calibration RMSE: {rmse_bps:.2f} bps")
 
-# --- 3. HJM Volatility Calibration from Historical SOFR Volatility ---
+# --- 3. HJM Volatility Calibration ---
 sofr_clean = market_df['SOFR'].dropna()
-daily_diffs = sofr_clean.diff().dropna() / 100 # absolute rate changes
-hist_vol_annualized = daily_diffs.std() * np.sqrt(252) # annualized volatility in absolute terms
+daily_diffs = sofr_clean.diff().dropna() / 100
+hist_vol_annualized = daily_diffs.std() * np.sqrt(252)
 sigma_0_calibrated = hist_vol_annualized
-a_vol_calibrated = 0.25 # decay speed
+a_vol_calibrated = 0.25
 
-print(f"\n--- Calibrated HJM Volatility Parameters ---")
-print(f"Historical SOFR Annualized Volatility (sigma_0): {sigma_0_calibrated*10000:.1f} bps")
-print(f"Volatility Decay Parameter (a): {a_vol_calibrated:.4f}")
-
-# Defined functions for calibrated model
 def calibrated_forward_rate(T):
     return r0_fit + (r_inf_fit - r0_fit)*(1 - np.exp(-kappa_fit*T)) + gamma_fit*T*np.exp(-kappa_fit*T)
 
@@ -109,16 +87,19 @@ def calibrated_hjm_drift(t, T):
     integrated_vol = (sigma_0_calibrated / a_vol_calibrated) * (1.0 - np.exp(-a_vol_calibrated * (T - t)))
     return vol * integrated_vol
 
-# --- 4. Monte Carlo Simulation under Real Calibrated Market Model ---
-n_paths = 10000
+# --- 4. High-Precision Monte Carlo Simulation under Calibrated HJM ---
+n_paths = 20000
 T_max = 5.0
-n_steps = 100
+n_steps = 250 # Fine resolution (dt = 0.02 yrs = ~5 trading days)
 dt = T_max / n_steps
 time_grid = np.linspace(0, T_max, n_steps + 1)
 n_maturities = 50
 maturity_grid = np.linspace(0, T_max, n_maturities)
 
-dW = np.random.normal(0, np.sqrt(dt), (n_steps, n_paths))
+# Antithetic Variates for variance reduction
+half_paths = n_paths // 2
+dW_half = np.random.normal(0, np.sqrt(dt), (n_steps, half_paths))
+dW = np.hstack([dW_half, -dW_half])
 
 r_paths = np.zeros((n_steps + 1, n_paths))
 r_paths[0, :] = r0_fit
@@ -129,7 +110,7 @@ for j, T in enumerate(maturity_grid):
 
 for i in range(n_steps):
     t = time_grid[i]
-    dW_i = dW[i, 0] # sample path
+    dW_i = dW[i, 0]
     for j, T in enumerate(maturity_grid):
         if T >= t:
             drift = calibrated_hjm_drift(t, T)
@@ -138,7 +119,6 @@ for i in range(n_steps):
         else:
             f_path[i+1, j] = f_path[i, j]
 
-# Simulate short rate paths r(t)
 for i in range(n_steps):
     t = time_grid[i]
     exp_kt = np.exp(-kappa_fit * t)
@@ -153,65 +133,61 @@ idx_T1, idx_T2 = int(T1/dt), int(T2/dt)
 integral_r = np.sum(r_paths[idx_T1:idx_T2, :], axis=0) * dt
 R_compounded_real = (np.exp(integral_r) - 1.0) / (T2 - T1)
 
-P_0_T1 = np.exp(-np.sum(r_paths[:idx_T1, :], axis=0) * dt).mean()
-P_0_T2 = np.exp(-np.sum(r_paths[:idx_T2, :], axis=0) * dt).mean()
+y1 = model_zero_yield(T1, r0_fit, r_inf_fit, kappa_fit, gamma_fit)
+y2 = model_zero_yield(T2, r0_fit, r_inf_fit, kappa_fit, gamma_fit)
+P_0_T1_analytical = np.exp(-y1 * T1)
+P_0_T2_analytical = np.exp(-y2 * T2)
 
-F_SOFR_analytical_real = (P_0_T1 / P_0_T2 - 1.0) / (T2 - T1)
+F_SOFR_analytical_real = (P_0_T1_analytical / P_0_T2_analytical - 1.0) / (T2 - T1)
 F_SOFR_mc_real = R_compounded_real.mean()
 
-print(f"\n--- Real Market Calibrated Forward SOFR (1Y-2Y) ---")
-print(f"Analytical Forward SOFR: {F_SOFR_analytical_real*100:.4f}%")
-print(f"Monte Carlo Compounded SOFR: {F_SOFR_mc_real*100:.4f}%")
+# Exact Analytical Jamshidian Bond Option Formula for SOFR Caplets
+K_real = 0.0450
+K_star = 1.0 + K_real * (T2 - T1)
+sig_p = (sigma_0_calibrated / a_vol_calibrated) * (1.0 - np.exp(-a_vol_calibrated * (T2 - T1))) * np.sqrt((1.0 - np.exp(-2.0 * a_vol_calibrated * T1)) / (2.0 * a_vol_calibrated))
 
-# Option Pricing: Real Market SOFR Caplet (Strike K = 4.25%)
-K_real = 0.0425
+d1 = (np.log(P_0_T1_analytical / (K_star * P_0_T2_analytical)) + 0.5 * sig_p**2) / sig_p
+d2 = d1 - sig_p
+
+caplet_price_real_analytical = K_star * P_0_T2_analytical * stats.norm.cdf(-d2) - P_0_T1_analytical * stats.norm.cdf(-d1)
+
+# Monte Carlo Caplet Pricing
 payoff_caplet = np.maximum(R_compounded_real - K_real, 0.0) * (T2 - T1)
 discount_to_0 = np.exp(-np.sum(r_paths[:idx_T2, :], axis=0) * dt)
 caplet_price_real_mc = (discount_to_0 * payoff_caplet).mean()
 
-# Closed-form analytical caplet pricing
-sigma_B1 = (sigma_0_calibrated / a_vol_calibrated) * (1.0 - np.exp(-a_vol_calibrated * T1))
-sigma_B2 = (sigma_0_calibrated / a_vol_calibrated) * (1.0 - np.exp(-a_vol_calibrated * T2))
-sigma_p = np.sqrt( ( (sigma_B2 - sigma_B1)**2 ) * T1 ) # simplified proxy
-K_star = 1.0 + K_real * (T2 - T1)
-d1 = (np.log(P_0_T1 / (K_star * P_0_T2)) + 0.5 * sigma_p**2) / sigma_p
-d2 = d1 - sigma_p
-caplet_price_real_analytical = P_0_T1 * stats.norm.cdf(-d2) - K_star * P_0_T2 * stats.norm.cdf(-d1)
+pricing_diff_bps = abs(caplet_price_real_analytical - caplet_price_real_mc) * 10000
 
-print(f"\n--- Real Market SOFR Caplet Pricing (Strike K=4.25%) ---")
-print(f"Analytical Caplet Price: {caplet_price_real_analytical*10000:.2f} bps")
-print(f"Monte Carlo Caplet Price: {caplet_price_real_mc*10000:.2f} bps")
-print(f"Pricing Error: {abs(caplet_price_real_analytical - caplet_price_real_mc)*10000:.2f} bps")
+print(f"\n--- High-Precision Calibrated Results ---")
+print(f"Initial Yield Curve RMSE: {rmse_bps:.2f} bps")
+print(f"Forward SOFR Rate Analytical: {F_SOFR_analytical_real*100:.4f}%")
+print(f"Forward SOFR Rate Monte Carlo: {F_SOFR_mc_real*100:.4f}%")
+print(f"SOFR Caplet Price Analytical: {caplet_price_real_analytical*10000:.2f} bps")
+print(f"SOFR Caplet Price Monte Carlo: {caplet_price_real_mc*10000:.2f} bps")
+print(f"Pricing Error: {pricing_diff_bps:.2f} bps")
 
-# --- 5. Generate Publication Figures with Real Market Data ---
-
+# --- 5. Generate Publication Figures ---
 plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
 
-# Figure 1: Historical SOFR Series & Yield Curve Calibration
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5), dpi=300)
-
 ax1.plot(sofr_clean.index, sofr_clean.values, color='#1f77b4', lw=1.5, label='Daily SOFR Rate (%)')
 ax1.set_xlabel('Date', fontsize=11)
 ax1.set_ylabel('Interest Rate (%)', fontsize=11)
 ax1.set_title('Federal Reserve Historical SOFR Series (2018–2026)', fontsize=12, fontweight='bold')
 ax1.legend(loc='upper left', frameon=True)
 
-# Yield curve fit
 fine_maturities = np.linspace(0.1, 30.0, 100)
 fitted_curve = [model_zero_yield(T, r0_fit, r_inf_fit, kappa_fit, gamma_fit)*100 for T in fine_maturities]
-
 ax2.plot(maturities_market, yields_market * 100, 'ro', ms=7, label=f'Real Market Quotes ({latest_date.strftime("%b %Y")})')
 ax2.plot(fine_maturities, fitted_curve, 'b-', lw=2.5, label=f'HJM Initial Zero Curve $y(0,T)$ (RMSE: {rmse_bps:.2f} bps)')
 ax2.set_xlabel('Maturity $T$ (Years)', fontsize=11)
 ax2.set_ylabel('Zero Yield (%)', fontsize=11)
 ax2.set_title('Real Market Yield Curve Calibration', fontsize=12, fontweight='bold')
 ax2.legend(loc='lower right', frameon=True)
-
 plt.tight_layout()
 plt.savefig("figures/fig1_real_market_calibration.png")
 plt.close()
 
-# Figure 2: Real 3D Forward Surface under Calibrated Parameters
 fig = plt.figure(figsize=(10, 6), dpi=300)
 ax = fig.add_subplot(111, projection='3d')
 T_mesh, t_mesh = np.meshgrid(maturity_grid, time_grid)
@@ -232,18 +208,14 @@ plt.tight_layout()
 plt.savefig("figures/fig2_real_forward_surface.png")
 plt.close()
 
-# Figure 3: Empirical Compounded SOFR Distribution vs Fit
 fig, ax = plt.subplots(figsize=(8, 5), dpi=300)
-n_bins, bins, patches = ax.hist(R_compounded_real * 100, bins=60, density=True, alpha=0.6, color='#2ca02c', edgecolor='black', label='Compounded SOFR $R(1Y, 2Y)$ MC Distribution (10,000 Paths)')
-
+n_bins, bins, patches = ax.hist(R_compounded_real * 100, bins=60, density=True, alpha=0.6, color='#2ca02c', edgecolor='black', label='Compounded SOFR $R(1Y, 2Y)$ MC Distribution (20,000 Paths)')
 shape, loc, scale = stats.lognorm.fit(R_compounded_real * 100, floc=0)
 x_pdf = np.linspace(bins[0], bins[-1], 200)
 pdf_fitted = stats.lognorm.pdf(x_pdf, shape, loc, scale)
 ax.plot(x_pdf, pdf_fitted, 'r-', lw=2.5, label='Log-Normal Density Fit')
-
 ax.axvline(K_real * 100, color='darkred', linestyle='--', lw=2, label=f'Caplet Strike K = {K_real*100:.2f}%')
 ax.axvline(F_SOFR_analytical_real * 100, color='darkgreen', linestyle='-', lw=2, label=f'Forward SOFR Rate = {F_SOFR_analytical_real*100:.2f}%')
-
 ax.set_xlabel('Compounded SOFR Rate $R(1Y, 2Y)$ (%)', fontsize=12)
 ax.set_ylabel('Probability Density', fontsize=12)
 ax.set_title('Calibrated Compounded SOFR Rate Distribution', fontsize=13, fontweight='bold')
@@ -252,9 +224,7 @@ plt.tight_layout()
 plt.savefig("figures/fig3_real_sofr_distribution.png")
 plt.close()
 
-# Figure 4: Simulated Rates & Real Forward Curve Projections
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5), dpi=300)
-
 for k in range(30):
     ax1.plot(time_grid, r_paths[:, k] * 100, lw=0.8, alpha=0.6)
 ax1.plot(time_grid, r_paths.mean(axis=1) * 100, 'k-', lw=3, label='Mean Short Rate $E[r(t)]$')
@@ -275,9 +245,8 @@ ax2.set_xlabel('Maturity $T$ (Years)', fontsize=11)
 ax2.set_ylabel('Forward Rate $f(t, T)$ (%)', fontsize=11)
 ax2.set_title('Forward Curve Projections $f(t, T)$ Across Horizons', fontsize=12, fontweight='bold')
 ax2.legend(loc='lower right', frameon=True)
-
 plt.tight_layout()
 plt.savefig("figures/fig4_real_curve_projections.png")
 plt.close()
 
-print("\nReal market calibration complete and all 4 figures generated successfully!")
+print("\nReal market calibration complete!")
