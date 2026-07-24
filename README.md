@@ -13,21 +13,33 @@ Following the global transition from forward-looking LIBOR benchmarks to backwar
 
 ---
 
-## Real Market Calibration Results (Federal Reserve FRED Data)
+## Real Market Calibration & Model Performance
 
-Calibrated on official Federal Reserve Economic Data (FRED) spanning 2018 through July 2026:
+### Table 1: Live Input Market Rates (Federal Reserve Data as of July 23, 2026)
+*These are the actual real-world interest rate benchmarks fetched from the Federal Reserve (FRED) used to calibrate the model:*
 
-- **Initial Yield Curve Fit (RMSE)**: **`11.35 bps`**
-- **Historical SOFR Volatility ($\sigma_0$)**: **`59.1 bps`**
-- **1Y–2Y Forward Compounded SOFR Rate**: **`4.4128%` (Analytical)** vs **`4.4172%` (10,000-Path Monte Carlo)** — Difference of **`0.44 bps`**!
+| Market Instrument / Tenor | Federal Reserve Market Rate | Data Source |
+| :--- | :---: | :--- |
+| **Overnight SOFR Rate** | **3.6400%** | Federal Reserve Bank of NY |
+| **1-Month Treasury Yield** | **3.7600%** | US Treasury / FRED |
+| **3-Month Treasury Yield** | **3.8900%** | US Treasury / FRED |
+| **6-Month Treasury Yield** | **4.0500%** | US Treasury / FRED |
+| **1-Year Treasury Yield** | **4.1100%** | US Treasury / FRED |
+| **2-Year Treasury Yield** | **4.3100%** | US Treasury / FRED |
+| **5-Year Treasury Yield** | **4.4100%** | US Treasury / FRED |
+| **10-Year Treasury Yield** | **4.6700%** | US Treasury / FRED |
+| **30-Year Treasury Yield** | **5.1500%** | US Treasury / FRED |
 
-| Instrument / Rate | Analytical Solution | 10,000-Path Monte Carlo | Relative Error / Difference |
+---
+
+### Table 2: Model Pricing & Simulation Performance
+*Comparison between our closed-form analytical formula and the 10,000-path Monte Carlo simulation engine:*
+
+| Instrument / Derivative | Closed-Form Analytical Formula | 10,000-Path Monte Carlo Simulation | Absolute Difference / Pricing Error |
 | :--- | :---: | :---: | :---: |
-| **Overnight SOFR Rate** | — | — | **3.6400%** |
-| **10-Year Treasury Yield** | — | — | **4.6700%** |
-| **30-Year Treasury Yield** | — | — | **5.1500%** |
-| **Forward SOFR Rate (1Y–2Y)** | **4.4128%** | **4.4172%** | **0.44 bps (0.09%)** |
+| **Forward Compounded SOFR Rate (1Y–2Y)** | **4.4128%** | **4.4172%** | **0.44 bps (0.09%)** |
 | **SOFR Caplet Price ($K = 4.25\%$)** | **19.75 bps** | **29.64 bps** | **9.89 bps** |
+| **Zero Curve Calibration Precision** | — | — | **11.35 bps (RMSE)** |
 
 ---
 
@@ -60,7 +72,7 @@ Calibrated on official Federal Reserve Economic Data (FRED) spanning 2018 throug
 ## Repository Structure
 
 ```
-SOFR_HJM_Term_Structure_Model/
+SOFR_HJM_Research_Paper/
 ├── README.md                      # Project documentation with embedded plots
 ├── src/
 │   ├── calibrate_sofr_hjm_real_data.py  # Calibration script on live FRED data
